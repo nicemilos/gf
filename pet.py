@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, QRectF, QSettings
 from PySide6.QtGui import QPixmap, QPainter
 from PySide6.QtWidgets import QApplication, QWidget, QMenu, QSystemTrayIcon
+from run_rig import RunRig, FRAME_COUNT, FPS
 
 
 class Pet(QWidget):
@@ -19,9 +20,12 @@ class Pet(QWidget):
         self.open = QPixmap(str(base / 'open.png'))
         self.closed = QPixmap(str(base / 'blink.png'))
         self.q_open = QPixmap(str(base / 'q-open.png'))
-        self.q_running = [QPixmap(str(base / f'q-run-{frame}.png')) for frame in ('a', 'b')]
+        rig = RunRig(base)
+        self.q_running = [rig.render('q', frame).scaled(512, 512, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                          for frame in range(FRAME_COUNT)]
         self.natural_open = QPixmap(str(base / 'natural-open.png'))
-        self.natural_running = [QPixmap(str(base / f'natural-run-{frame}.png')) for frame in ('a', 'b')]
+        self.natural_running = [rig.render('natural', frame).scaled(512, 512, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                                for frame in range(FRAME_COUNT)]
         if any(pix.isNull() for pix in (self.open, self.closed, self.q_open,
                                         self.natural_open, *self.q_running, *self.natural_running)):
             raise RuntimeError('缺少角色图片')
@@ -77,11 +81,8 @@ class Pet(QWidget):
         jump_age = now - self.jump_at
         lift = 27 * math.sin(jump_age / .6 * math.pi) if 0 < jump_age < .6 else 0
         running = self.dragging and now - self.last_drag_move < .18
-        if running:
-            stride = (now - self.run_started) * 24
-            lift += 5 + 4 * abs(math.sin(stride))
-        h = self.pet_height * (1 + breath)
-        frame = int((now - self.run_started) * 8) % 2
+        h = self.pet_height * (1 if running else 1 + breath)
+        frame = int((now - self.run_started) * FPS) % FRAME_COUNT
         if self.appearance == 'q':
             pix = self.q_running[frame] if running else self.q_open
         else:
@@ -92,7 +93,6 @@ class Pet(QWidget):
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         if running:
             painter.translate(self.width() / 2, y + h / 2)
-            painter.rotate(3 * math.sin(stride))
             painter.scale(self.run_direction, 1)
             target = QRectF(-w / 2, -h / 2, w, h)
         else:
@@ -172,7 +172,7 @@ class Pet(QWidget):
         sizes = menu.addMenu('调整大小')
         for label, height in [('小 · 240', 240), ('中 · 330', 330), ('大 · 440', 440)]:
             sizes.addAction(label, lambda h=height: self.change_size(h))
-        action = menu.addAction('呼吸与眨眼')
+        action = menu.addAction('呼吸动画')
         action.setCheckable(True)
         action.setChecked(self.motion)
         action.triggered.connect(self.toggle_motion)
