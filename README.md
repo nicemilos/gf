@@ -4,7 +4,8 @@
 
 ## 功能
 
-- 始终置顶，可用鼠标拖动。
+- 始终置顶，鼠标拖动时显示跑步动作与方向，松开后恢复站立。
+- 默认显示 Q 版；单击角色可在 Q 版与接近原照的形象之间切换，右键菜单也可切换。
 - 轻微呼吸与随机眨眼。
 - 双击角色跳一下。
 - 右键调整三档大小、开关动画或退出。
@@ -47,6 +48,9 @@ dist\Xiaoya\Xiaoya.exe --smoke-test
 - `pet.py`：桌宠窗口、动画与菜单。
 - `assets/open.png`：已确认的睁眼角色。
 - `assets/blink.png`：基于相同角色生成的闭眼帧。
+- `assets/run.png`：拖动时使用的跑步姿势。
+- `assets/q-open.png`、`assets/q-run.png`：Q 版站立与跑步素材。
+- `assets/natural-open.png`：接近原照的站立素材。
 - `Xiaoya.spec`：Windows 打包配置。
 
 角色素材由用户提供的参考照片经 AI 生成。本仓库未包含原始照片。当前版本不包含跑动或对话功能。
