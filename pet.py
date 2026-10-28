@@ -18,12 +18,12 @@ class Pet(QWidget):
         base = Path(getattr(sys, '_MEIPASS', Path(__file__).parent)) / 'assets'
         self.open = QPixmap(str(base / 'open.png'))
         self.closed = QPixmap(str(base / 'blink.png'))
-        self.running = QPixmap(str(base / 'run.png'))
         self.q_open = QPixmap(str(base / 'q-open.png'))
-        self.q_running = QPixmap(str(base / 'q-run.png'))
+        self.q_running = [QPixmap(str(base / f'q-run-{frame}.png')) for frame in ('a', 'b')]
         self.natural_open = QPixmap(str(base / 'natural-open.png'))
-        if any(pix.isNull() for pix in (self.open, self.closed, self.running,
-                                        self.q_open, self.q_running, self.natural_open)):
+        self.natural_running = [QPixmap(str(base / f'natural-run-{frame}.png')) for frame in ('a', 'b')]
+        if any(pix.isNull() for pix in (self.open, self.closed, self.q_open,
+                                        self.natural_open, *self.q_running, *self.natural_running)):
             raise RuntimeError('缺少角色图片')
         self.appearance = 'q'
         self.settings = QSettings('XiaoyaLocal', 'DesktopPet')
@@ -32,6 +32,7 @@ class Pet(QWidget):
         self.drag_offset = None
         self.drag_origin = None
         self.dragging = False
+        self.run_window_extra = 0
         self.run_direction = 1
         self.last_drag_move = 0
         self.run_started = 0
@@ -77,13 +78,14 @@ class Pet(QWidget):
         lift = 27 * math.sin(jump_age / .6 * math.pi) if 0 < jump_age < .6 else 0
         running = self.dragging and now - self.last_drag_move < .18
         if running:
-            stride = (now - self.run_started) * 13
+            stride = (now - self.run_started) * 24
             lift += 5 + 4 * abs(math.sin(stride))
         h = self.pet_height * (1 + breath)
+        frame = int((now - self.run_started) * 8) % 2
         if self.appearance == 'q':
-            pix = self.q_running if running else self.q_open
+            pix = self.q_running[frame] if running else self.q_open
         else:
-            pix = self.running if running else self.natural_open
+            pix = self.natural_running[frame] if running else self.natural_open
         w = h * pix.width() / pix.height()
         y = self.height() - 12 - h - lift
         painter = QPainter(self)
@@ -112,6 +114,14 @@ class Pet(QWidget):
             if not self.dragging:
                 self.dragging = True
                 self.run_started = time.monotonic()
+                frames = self.q_running if self.appearance == 'q' else self.natural_running
+                run_width = max(round(self.pet_height * pix.width() / pix.height()) for pix in frames) + 24
+                self.run_window_extra = max(0, run_width - self.width())
+                if self.run_window_extra:
+                    half_extra = self.run_window_extra // 2
+                    self.resize(self.width() + self.run_window_extra, self.height())
+                    self.move(self.x() - half_extra, self.y())
+                    self.drag_offset.setX(self.drag_offset.x() + half_extra)
             delta_x = cursor.x() - self.x() - self.drag_offset.x()
             if delta_x:
                 self.run_direction = 1 if delta_x > 0 else -1
@@ -125,6 +135,11 @@ class Pet(QWidget):
             self.drag_offset = None
             self.drag_origin = None
             self.dragging = False
+            if self.run_window_extra:
+                half_extra = self.run_window_extra // 2
+                self.move(self.x() + half_extra, self.y())
+                self.resize(self.width() - self.run_window_extra, self.height())
+                self.run_window_extra = 0
             self.unsetCursor()
             self.keep_on_screen()
             self.update()

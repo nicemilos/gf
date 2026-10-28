@@ -48,9 +48,8 @@ dist\Xiaoya\Xiaoya.exe --smoke-test
 - `pet.py`：桌宠窗口、动画与菜单。
 - `assets/open.png`：已确认的睁眼角色。
 - `assets/blink.png`：基于相同角色生成的闭眼帧。
-- `assets/run.png`：拖动时使用的跑步姿势。
-- `assets/q-open.png`、`assets/q-run.png`：Q 版站立与跑步素材。
-- `assets/natural-open.png`：接近原照的站立素材。
+- `assets/q-open.png`、`assets/natural-open.png`：两版站立素材。
+- `assets/q-run-a.png`、`assets/q-run-b.png`、`assets/natural-run-a.png`、`assets/natural-run-b.png`：两版侧面跑步帧，拖动时交替播放。
 - `Xiaoya.spec`：Windows 打包配置。
 
 角色素材由用户提供的参考照片经 AI 生成。本仓库未包含原始照片。当前版本不包含跑动或对话功能。
