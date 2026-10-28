@@ -138,4 +138,3 @@ if __name__ == '__main__':
     if '--smoke-test' in sys.argv:
         QTimer.singleShot(500, app.quit)
     sys.exit(app.exec())
-
