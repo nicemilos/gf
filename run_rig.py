@@ -21,31 +21,38 @@ def ik(start, end, length, bend=1):
 
 def pose(mode, phase):
     phase %= 1
-    leg = 190 if mode == 'natural' else 110
-    hip_y = (600 if mode == 'natural' else 750) + leg * .065 * math.sin(phase * 4 * math.pi)
-    shoulder = (530, hip_y - (215 if mode == 'natural' else 210))
-    arm = 105 if mode == 'natural' else 80
-    arm_shoulder = (shoulder[0] - 10, shoulder[1] + (55 if mode == 'natural' else 40))
+    leg = 185 if mode == 'natural' else 110
+    # A small rise during flight, with the jacket leaning forward from the hip.
+    hip_y = (600 if mode == 'natural' else 750) + leg * .035 * math.cos(phase * 4 * math.pi - .8 * math.pi)
+    torso_length = 285 if mode == 'natural' else 220
+    shoulder = (500 + torso_length * math.sin(math.radians(7)),
+                hip_y - torso_length * math.cos(math.radians(7)))
+    arm = 120 if mode == 'natural' else 90
+    # Match the jacket's side seam, rather than attaching the arm to its chest.
+    arm_shoulder = (shoulder[0] - 55, shoulder[1] + 75)
     limbs = []
     for offset in (0, .5):
         p = (phase + offset) % 1
-        reach = leg * .56
+        reach = leg * .48
         if p <= .4:
             x = reach * (1 - 2 * p / .4)
             y = GROUND
         else:
             s = (p - .4) / .6
             x = reach * (-1 + 2 * (3 * s * s - 2 * s ** 3))
-            y = GROUND - leg * .9 * math.sin(math.pi * s)
+            y = GROUND - leg * .52 * math.sin(math.pi * s)
         hip = (500, hip_y)
         ankle = (500 + x, y)
         knee = ik(hip, ankle, leg)
-        # Wrist goes opposite the SAME-side ankle around its own shoulder.
-        wrist = (arm_shoulder[0] - .90 * x, arm_shoulder[1] + arm * 1.25)
+        # Bent arms have a forward rest offset. Their swing (not their absolute
+        # wrist position relative to the shoulder) opposes the same-side leg.
+        wrist = (arm_shoulder[0] + arm * .45 - .70 * x,
+                 arm_shoulder[1] + arm * 1.45)
         elbow = ik(arm_shoulder, wrist, arm, -1)
         limbs.append(dict(hip=hip, knee=knee, ankle=ankle, shoulder=arm_shoulder,
                           elbow=elbow, wrist=wrist, phase=p, stance=p <= .4))
-    return dict(limbs=limbs, hip_y=hip_y, shoulder=shoulder, leg=leg, arm=arm)
+    return dict(limbs=limbs, hip_y=hip_y, shoulder=shoulder, leg=leg, arm=arm,
+                torso_length=torso_length)
 
 
 class RunRig:
@@ -79,22 +86,25 @@ class RunRig:
         painter.save()
         painter.translate(*a)
         painter.rotate(-math.degrees(math.atan2(b[0] - a[0], b[1] - a[1])))
-        painter.drawPixmap(QRectF(-width / 2, -length * .12, width, length * 1.24), pix, QRectF(pix.rect()))
+        # The calf ends at the ankle; extending it beyond the pivot leaves a
+        # pointed trouser flap sticking through the separately rotated shoe.
+        extent = 1.12 if name == 'shin' else 1.24
+        painter.drawPixmap(QRectF(-width / 2, -length * .12, width, length * extent), pix, QRectF(pix.rect()))
         painter.restore()
 
     def draw_limb(self, painter, limb, leg, arm, far, arms):
         if arms:
-            self.segment(painter, 'upper', limb['shoulder'], limb['elbow'], arm * .9, far)
-            self.segment(painter, 'fore', limb['elbow'], limb['wrist'], arm * .72, far)
+            self.segment(painter, 'upper', limb['shoulder'], limb['elbow'], arm * .95, far)
+            self.segment(painter, 'fore', limb['elbow'], limb['wrist'], arm * .85, far)
         else:
-            self.segment(painter, 'shin', limb['knee'], limb['ankle'], leg * .48, far)
-            self.segment(painter, 'thigh', limb['hip'], limb['knee'], leg * .56, far)
+            self.segment(painter, 'shin', limb['knee'], limb['ankle'], leg * .70, far)
+            self.segment(painter, 'thigh', limb['hip'], limb['knee'], leg * .78, far)
             pix = (self.dark if far else self.parts)['shoe']
             painter.save()
             painter.translate(*limb['ankle'])
             if not limb['stance']:
                 painter.rotate(-22 * math.sin(math.pi * (limb['phase'] - .4) / .6))
-            painter.drawPixmap(QRectF(-leg * .24, -leg * .08, leg * .72, leg * .30), pix, QRectF(pix.rect()))
+            painter.drawPixmap(QRectF(-leg * .30, -leg * .08, leg * .88, leg * .32), pix, QRectF(pix.rect()))
             painter.restore()
 
     def render(self, mode, frame, debug=False):
@@ -111,7 +121,7 @@ class RunRig:
         self.draw_limb(p, near, data['leg'], data['arm'], False, False)
         shoulder = data['shoulder']
         head = self.parts['natural_head' if mode == 'natural' else 'head']
-        height = 500 if mode == 'natural' else 650
+        height = 450 if mode == 'natural' else 610
         width = height * head.width() / head.height()
         left = shoulder[0] - width * .68
         top = shoulder[1] - height * (.61 if mode == 'natural' else .68)
@@ -123,8 +133,13 @@ class RunRig:
             p.drawPixmap(QRectF(left + sway, top + y / head.height() * height, width, band / head.height() * height),
                          head, QRectF(0, y, head.width(), band))
         torso = self.parts['torso']
-        p.drawPixmap(QRectF(shoulder[0] - 90, shoulder[1] - 35, 160, data['hip_y'] - shoulder[1] + 65),
-                     torso, QRectF(torso.rect()))
+        p.save()
+        p.translate(500, data['hip_y'])
+        p.rotate(7)
+        torso_width = 235 if mode == 'natural' else 215
+        p.drawPixmap(QRectF(-torso_width / 2, -data['torso_length'] - 30,
+                           torso_width, data['torso_length'] + 65), torso, QRectF(torso.rect()))
+        p.restore()
         self.draw_limb(p, near, data['leg'], data['arm'], False, True)
         if debug:
             for limb, color in ((far, '#e6a235'), (near, '#16b4c7')):

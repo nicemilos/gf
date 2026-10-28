@@ -17,7 +17,7 @@ class RunCycleTests(unittest.TestCase):
                 opposite = pose(mode, phase + .5)
                 for side, limb in enumerate(data['limbs']):
                     leg_x = limb['ankle'][0] - limb['hip'][0]
-                    arm_x = limb['wrist'][0] - limb['shoulder'][0]
+                    arm_x = limb['wrist'][0] - limb['shoulder'][0] - data['arm'] * .45
                     self.assertLessEqual(leg_x * arm_x, 1e-8)
                     for point in ('hip', 'knee', 'ankle', 'shoulder', 'elbow', 'wrist'):
                         for a, b in zip(limb[point], opposite['limbs'][1 - side][point]):
@@ -29,6 +29,7 @@ class RunCycleTests(unittest.TestCase):
                                           ('shoulder', 'elbow', data['arm']), ('elbow', 'wrist', data['arm'])):
                         self.assertAlmostEqual(math.dist(limb[a], limb[b]), length, places=7)
             self.assertTrue(all(not limb['stance'] for limb in pose(mode, .45)['limbs']))
+            self.assertLess(pose(mode, .45)['hip_y'], pose(mode, .2)['hip_y'])
             self.assertEqual(pose(mode, 0), pose(mode, 1))
 
     def test_all_frames_render_without_edge_clipping(self):
