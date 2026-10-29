@@ -11,8 +11,10 @@ FPS = 12
 
 
 class WholeRun:
-    def __init__(self, assets):
-        folder = Path(assets) / 'whole-run/q'
+    def __init__(self, assets, appearance='q'):
+        if appearance not in ('q', 'natural'):
+            raise ValueError('Unknown appearance')
+        folder = Path(assets) / 'whole-run' / appearance
         manifest = json.loads((folder / 'frames.json').read_text(encoding='utf-8'))
         self.frames = []
         reference = QImage(str(folder / '01.png')).convertToFormat(QImage.Format_RGBA8888)
@@ -23,12 +25,12 @@ class WholeRun:
                 raise RuntimeError(f'Missing whole-character run frame {index + 1}')
             bounds = QRegion(QBitmap.fromImage(source.toImage().createAlphaMask())).boundingRect()
             source = QPixmap.fromImage(match_coat(source.toImage(), reference_tone))
-            scale = 900 / bounds.height()
+            scale = manifest.get('target_height', 900) / bounds.height()
             canvas = QPixmap(1400, 1100)
             canvas.fill(Qt.transparent)
             painter = QPainter(canvas)
             painter.setRenderHint(QPainter.SmoothPixmapTransform)
-            painter.drawPixmap(QRectF(1000 - eye_x * scale, 1030 - bounds.bottom() * scale,
+            painter.drawPixmap(QRectF(manifest.get('target_eye_x', 1000) - eye_x * scale, 1030 - bounds.bottom() * scale,
                                       source.width() * scale, source.height() * scale),
                                source, QRectF(source.rect()))
             painter.end()

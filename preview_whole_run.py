@@ -3,15 +3,16 @@ import sys
 import time
 from pathlib import Path
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QSlider, QSpinBox
+from PySide6.QtWidgets import QApplication, QWidget, QLabel, QVBoxLayout, QHBoxLayout, QPushButton, QSlider, QSpinBox, QComboBox
 from whole_run import WholeRun, FRAME_COUNT, FPS
 
 
 class Preview(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('小雅 · Q版整帧跑步 · 1→8→1')
-        self.run = WholeRun(Path(__file__).parent / 'assets')
+        self.setWindowTitle('小雅 · 两版整帧跑步 · 1→8→1')
+        self.runs = {mode: WholeRun(Path(__file__).parent / 'assets', mode) for mode in ('q', 'natural')}
+        self.run = self.runs['natural']
         self.playing = True
         self.frame = 0
         self.started = time.monotonic()
@@ -22,6 +23,10 @@ class Preview(QWidget):
         self.picture.setStyleSheet('background: #e9edf1')
         layout.addWidget(self.picture)
         row = QHBoxLayout()
+        appearance = QComboBox()
+        appearance.addItems(['原版', 'Q版'])
+        appearance.currentIndexChanged.connect(lambda index: self.change_appearance(('natural', 'q')[index]))
+        row.addWidget(appearance)
         self.play = QPushButton('暂停')
         self.play.clicked.connect(self.toggle)
         row.addWidget(self.play)
@@ -46,6 +51,10 @@ class Preview(QWidget):
         self.timer.timeout.connect(self.tick)
         self.timer.start(16)
         self.show_frame(0)
+
+    def change_appearance(self, mode):
+        self.run = self.runs[mode]
+        self.show_frame(self.frame)
 
     def show_frame(self, frame):
         self.frame = frame % FRAME_COUNT

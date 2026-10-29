@@ -7,7 +7,6 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QTimer, QRectF, QSettings
 from PySide6.QtGui import QPixmap, QPainter
 from PySide6.QtWidgets import QApplication, QWidget, QMenu, QSystemTrayIcon
-from run_rig import RunRig, FRAME_COUNT, FPS
 from whole_run import WholeRun, FPS as WHOLE_FPS
 
 
@@ -21,12 +20,11 @@ class Pet(QWidget):
         self.open = QPixmap(str(base / 'open.png'))
         self.closed = QPixmap(str(base / 'blink.png'))
         self.q_open = QPixmap(str(base / 'q-open.png'))
-        rig = RunRig(base)
         self.q_running = [pix.scaledToHeight(512, Qt.SmoothTransformation)
                           for pix in WholeRun(base).frames]
         self.natural_open = QPixmap(str(base / 'natural-open.png'))
-        self.natural_running = [rig.render('natural', frame).scaledToHeight(512, Qt.SmoothTransformation)
-                                for frame in range(FRAME_COUNT)]
+        self.natural_running = [pix.scaledToHeight(512, Qt.SmoothTransformation)
+                                for pix in WholeRun(base, 'natural').frames]
         if any(pix.isNull() for pix in (self.open, self.closed, self.q_open,
                                         self.natural_open, *self.q_running, *self.natural_running)):
             raise RuntimeError('缺少角色图片')
@@ -84,7 +82,7 @@ class Pet(QWidget):
         running = self.dragging and now - self.last_drag_move < .18
         h = self.pet_height * (1 if running else 1 + breath)
         frames = self.q_running if self.appearance == 'q' else self.natural_running
-        frame = int((now - self.run_started) * (WHOLE_FPS if self.appearance == 'q' else FPS)) % len(frames)
+        frame = int((now - self.run_started) * WHOLE_FPS) % len(frames)
         if self.appearance == 'q':
             pix = self.q_running[frame] if running else self.q_open
         else:
