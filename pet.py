@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, QTimer, QRectF, QSettings
 from PySide6.QtGui import QPixmap, QPainter
 from PySide6.QtWidgets import QApplication, QWidget, QMenu, QSystemTrayIcon
 from run_rig import RunRig, FRAME_COUNT, FPS
+from whole_run import WholeRun, FPS as WHOLE_FPS
 
 
 class Pet(QWidget):
@@ -21,8 +22,8 @@ class Pet(QWidget):
         self.closed = QPixmap(str(base / 'blink.png'))
         self.q_open = QPixmap(str(base / 'q-open.png'))
         rig = RunRig(base)
-        self.q_running = [rig.render('q', frame).scaledToHeight(512, Qt.SmoothTransformation)
-                          for frame in range(FRAME_COUNT)]
+        self.q_running = [pix.scaledToHeight(512, Qt.SmoothTransformation)
+                          for pix in WholeRun(base).frames]
         self.natural_open = QPixmap(str(base / 'natural-open.png'))
         self.natural_running = [rig.render('natural', frame).scaledToHeight(512, Qt.SmoothTransformation)
                                 for frame in range(FRAME_COUNT)]
@@ -82,7 +83,8 @@ class Pet(QWidget):
         lift = 27 * math.sin(jump_age / .6 * math.pi) if 0 < jump_age < .6 else 0
         running = self.dragging and now - self.last_drag_move < .18
         h = self.pet_height * (1 if running else 1 + breath)
-        frame = int((now - self.run_started) * FPS) % FRAME_COUNT
+        frames = self.q_running if self.appearance == 'q' else self.natural_running
+        frame = int((now - self.run_started) * (WHOLE_FPS if self.appearance == 'q' else FPS)) % len(frames)
         if self.appearance == 'q':
             pix = self.q_running[frame] if running else self.q_open
         else:
