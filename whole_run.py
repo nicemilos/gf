@@ -25,12 +25,19 @@ class WholeRun:
                 raise RuntimeError(f'Missing whole-character run frame {index + 1}')
             bounds = QRegion(QBitmap.fromImage(source.toImage().createAlphaMask())).boundingRect()
             source = QPixmap.fromImage(match_coat(source.toImage(), reference_tone))
-            scale = manifest.get('target_height', 900) / bounds.height()
+            # A pose-dependent bounding box is not a character-size ruler:
+            # stretching a leg must never zoom the entire drawing.
+            scale = manifest.get('fixed_scale')
+            if scale is None:
+                scale = manifest.get('target_height', 900) / bounds.height()
+            top = 1030 - bounds.bottom() * scale
+            if 'eye_y' in manifest:
+                top = manifest['target_eye_y'][index] - manifest['eye_y'][index] * scale
             canvas = QPixmap(1400, 1100)
             canvas.fill(Qt.transparent)
             painter = QPainter(canvas)
             painter.setRenderHint(QPainter.SmoothPixmapTransform)
-            painter.drawPixmap(QRectF(manifest.get('target_eye_x', 1000) - eye_x * scale, 1030 - bounds.bottom() * scale,
+            painter.drawPixmap(QRectF(manifest.get('target_eye_x', 1000) - eye_x * scale, top,
                                       source.width() * scale, source.height() * scale),
                                source, QRectF(source.rect()))
             painter.end()
