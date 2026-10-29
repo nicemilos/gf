@@ -50,14 +50,14 @@ class Stage(QWidget):
 class Preview(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('小雅 · 重做跑步：16帧关节动画')
+        self.setWindowTitle('小雅 · 正侧面大步跑 · 16帧完整循环')
         self.resize(900, 580)
         self.stage = Stage()
         self.playing = True
         self.started = time.monotonic()
         self.start_frame = 0
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel('16 帧重做版 · 青色为近侧手脚，橙色为远侧手脚 · 第 1 与第 9 帧交换两侧'))
+        layout.addWidget(QLabel('大步跑 · 青色为近侧手脚，橙色为远侧手脚 · 第 1 与第 9 帧交换两侧'))
         layout.addWidget(self.stage)
         row = QHBoxLayout()
         self.play_button = QPushButton('暂停')
