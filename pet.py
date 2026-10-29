@@ -8,6 +8,7 @@ from PySide6.QtCore import Qt, QTimer, QRectF, QSettings
 from PySide6.QtGui import QPixmap, QPainter
 from PySide6.QtWidgets import QApplication, QWidget, QMenu, QSystemTrayIcon
 from whole_run import WholeRun, FPS as WHOLE_FPS
+from companion_ui import Companion, STYLE, beside
 
 
 class Pet(QWidget):
@@ -31,7 +32,7 @@ class Pet(QWidget):
         self.appearance = 'q'
         self.settings = QSettings('XiaoyaLocal', 'DesktopPet')
         self.pet_height = int(self.settings.value('height', 330))
-        self.motion = True
+        self.motion = str(self.settings.value('motion', 'true')).lower() in ('true', '1')
         self.drag_offset = None
         self.drag_origin = None
         self.dragging = False
@@ -42,7 +43,8 @@ class Pet(QWidget):
         self.suppress_click_menu = False
         self.click_menu_timer = QTimer(self)
         self.click_menu_timer.setSingleShot(True)
-        self.click_menu_timer.timeout.connect(self.show_appearance_menu)
+        self.companion = Companion(self)
+        self.click_menu_timer.timeout.connect(self.companion.speak)
         self.started = time.monotonic()
         self.blink_at = self.started + 3
         self.blink_until = 0
@@ -50,7 +52,7 @@ class Pet(QWidget):
         self.resize_pet(self.pet_height)
         screen = QApplication.primaryScreen().availableGeometry()
         self.move(screen.right() - self.width() - 40, screen.bottom() - self.height() - 20)
-        self.setToolTip('小雅：点击切换形象，拖动跑步，双击跳一下')
+        self.setToolTip('小雅：点击说话，右键打开菜单，拖动跑步，双击跳一下')
         self.tray = QSystemTrayIcon(self.q_open, self)
         self.tray.setToolTip('小雅 · 双击托盘图标找回桌宠')
         self.tray.setContextMenu(self.menu())
@@ -101,6 +103,7 @@ class Pet(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
+            self.companion.bubble.hide()
             self.drag_offset = event.globalPosition().toPoint() - self.pos()
             self.drag_origin = event.globalPosition().toPoint()
             self.dragging = False
@@ -160,26 +163,28 @@ class Pet(QWidget):
             self.suppress_click_menu = True
             self.jump_at = time.monotonic()
 
-    def show_appearance_menu(self):
-        self.active_appearance_menu = self.appearance_menu()
-        self.active_appearance_menu.popup(self.click_menu_position)
-
     def menu(self):
         menu = QMenu()
+        menu.setStyleSheet(STYLE)
         menu.addAction('小雅 · 桌面陪伴').setEnabled(False)
+        menu.addSeparator()
+        menu.addAction('和小雅聊天', self.companion.open_chat)
+        menu.addAction('模型配置…', self.companion.configure)
+        menu.addAction('性格与记忆…', self.companion.memory)
         menu.addSeparator()
         menu.addMenu(self.appearance_menu())
         sizes = menu.addMenu('调整大小')
         for label, height in [('小 · 240', 240), ('中 · 330', 330), ('大 · 440', 440)]:
             sizes.addAction(label, lambda h=height: self.change_size(h))
-        action = menu.addAction('呼吸动画')
-        action.setCheckable(True)
-        action.setChecked(self.motion)
-        action.triggered.connect(self.toggle_motion)
+        breathing = menu.addMenu('呼吸动画')
+        for label, enabled in [('开', True), ('关', False)]:
+            action = breathing.addAction(label, lambda checked=False, value=enabled: self.toggle_motion(value))
+            action.setCheckable(True)
+            action.setChecked(self.motion == enabled)
         menu.addAction('跳一下', lambda: setattr(self, 'jump_at', time.monotonic()))
-        menu.addAction('找回桌宠', self.restore)
+        menu.addAction('移回屏幕内', self.restore)
         menu.addSeparator()
-        menu.addAction('退出小雅', QApplication.instance().quit)
+        menu.addAction('退出桌宠', QApplication.instance().quit)
         return menu
 
     def appearance_menu(self):
@@ -198,6 +203,7 @@ class Pet(QWidget):
 
     def toggle_motion(self, checked):
         self.motion = checked
+        self.settings.setValue('motion', checked)
         self.tray.setContextMenu(self.menu())
 
     def change_size(self, height):
@@ -214,7 +220,11 @@ class Pet(QWidget):
             self.restore()
 
     def contextMenuEvent(self, event):
-        self.menu().exec(event.globalPos())
+        menu = self.menu()
+        position = beside(self, menu.sizeHint())
+        if position.x() < self.x():
+            menu.setLayoutDirection(Qt.RightToLeft)
+        menu.exec(position)
 
 
 if __name__ == '__main__':

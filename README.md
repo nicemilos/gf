@@ -44,7 +44,7 @@ python -m venv .venv
 dist\Xiaoya\Xiaoya.exe --smoke-test
 ```
 
-检查模式创建窗口后自动退出。正常模式不会设置开机启动，也不会上传图片或连接网络。
+检查模式创建窗口后自动退出。程序不会设置开机启动或上传角色图片。模型检测、聊天及自动记忆摘要会连接用户配置的模型服务。
 
 ## 文件
 
@@ -58,4 +58,27 @@ dist\Xiaoya\Xiaoya.exe --smoke-test
 - `test_run_rig.py`：检查半周期换边、手腿前后顺序、反向摆臂、骨长、大步幅、收腿、支撑/腾空、脚部轨迹连续性和绘制边界。
 - `Xiaoya.spec`：Windows 打包配置。
 
-角色素材由用户提供的参考照片经 AI 生成。本仓库未包含原始照片。当前版本不包含对话功能。
+角色素材由用户提供的参考照片经 AI 生成。本仓库未包含原始照片。
+
+## 聊天、模型与记忆
+
+左键单击显示本地文字气泡，双击跳跃，拖动仍跑步。右键菜单放在角色旁边，可进入聊天、模型配置、性格与记忆；呼吸动画使用开/关子菜单。“移回屏幕内”用于找回屏幕外的角色，“退出桌宠”关闭整个程序。
+
+模型配置支持 DeepSeek、OpenRouter、本地 Ollama 与自定义 Chat Completions 兼容接口。填写接口、API Key 和模型；输入完成失去焦点后自动检测，也可点击检测按钮。获取模型列表后发送简短测试消息验证真实聊天权限。检测与聊天可能计入厂商额度。DeepSeek 默认使用非思考模式减少闲聊延迟；其他原生协议（例如仅支持 Anthropic Messages 的地址）目前不能直接接入。
+
+Key 不要发到聊天里，在本机配置窗口填写。Windows DPAPI 加密存储，仅当前 Windows 用户可解密；密钥不会加入模型上下文、聊天日志或仓库。
+
+性格、用户资料、长期记忆及完整聊天历史存储于 `%LOCALAPPDATA%/XiaoyaLocal/Companion/memory.sqlite3`，重启保留。每次聊天使用最近上下文、长期摘要与关键词匹配的相关旧对话。默认每8轮额外调用一次模型整理长期记忆，可关闭；这属于有容量限制的摘要记忆，不保证所有细节都被模型正确回忆。用户可编辑、纠正或清空记忆。清空聊天历史不会删除独立长期记忆。
+
+聊天会将所需上下文发送给用户配置的模型厂商，头像及桌面截图不发送。当前为文字聊天，没有麦克风、语音合成、文件读取或系统执行工具。`XIAOYA_DATA_DIR` 可指定测试数据目录。
+
+`companion.py` 管理本地状态、兼容接口、DPAPI和记忆；`companion_ui.py` 管理异步任务、聊天窗口、配置和气泡。运行 `python -m unittest test_companion -v` 使用本机模拟服务验证连接、失败密钥、跨重启记忆和密钥加密。真实厂商仍需用户在界面填Key后检测。
+
+## 参考的开源方向
+
+- [Desktop Cat Companion](https://github.com/d011ar/Desktop-Cat-Companion)：Python/PySide6桌宠，兼容接口聊天与本地偏好记忆，技术栈最接近当前项目。
+- [Open-LLM-VTuber](https://github.com/Open-LLM-VTuber/Open-LLM-VTuber)：语音、Live2D、桌宠模式，适合后续需要语音或Live2D时评估。
+- [AIRI](https://github.com/moeru-ai/airi)：Web/Electron虚拟伙伴系统，功能完整，但不是可直接装入当前Qt窗口的组件。
+- [Hermes Agent](https://github.com/NousResearch/hermes-agent)：Nous Research的通用agent框架。其[记忆文档](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/memory.md)区分持久记忆和历史会话检索；[文件说明](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/which-file-does-what.md)解释SOUL.md性格、USER.md用户资料、MEMORY.md长期笔记。
+
+本版参考上述架构思路，复用现有Qt、SQLite和标准兼容接口，未复制这些项目代码，也未安装或内嵌Hermes。保留现有人物和动画可避免整体迁移到另一个桌宠前端。未来接Hermes需要另加服务桥接，其记忆不会自动与本程序SQLite同步。
