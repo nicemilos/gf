@@ -4,7 +4,7 @@ import unittest
 
 os.environ.setdefault('QT_QPA_PLATFORM', 'offscreen')
 from PySide6.QtWidgets import QApplication
-from run_rig import pose, foot_path, RunRig, GROUND, STANCE_END, FOOT_KEYS
+from run_rig import pose, foot_path, RunRig, GROUND, STANCE_END, FOOT_KEYS, sole_lift
 from pathlib import Path
 
 
@@ -28,13 +28,36 @@ class RunCycleTests(unittest.TestCase):
                             self.assertAlmostEqual(a, b, places=7)
                     self.assertLessEqual(limb['ankle'][1], GROUND + 1e-8)
                     if limb['stance']:
-                        self.assertAlmostEqual(limb['ankle'][1], GROUND)
+                        self.assertAlmostEqual(limb['ankle'][1] + sole_lift(limb['shoe_angle'], data['leg']), GROUND)
                     for a, b, length in (('hip', 'knee', data['leg']), ('knee', 'ankle', data['leg']),
                                           ('shoulder', 'elbow', data['arm']), ('elbow', 'wrist', data['arm'])):
                         self.assertAlmostEqual(math.dist(limb[a], limb[b]), length, places=7)
             self.assertTrue(all(not limb['stance'] for limb in pose(mode, .45)['limbs']))
             self.assertLess(pose(mode, .45)['hip_y'], pose(mode, .2)['hip_y'])
             self.assertEqual(pose(mode, 0), pose(mode, 1))
+
+    def test_elbows_open_on_backswing_and_shoes_roll(self):
+        for mode in ('natural', 'q'):
+            elbows = []
+            shoes = []
+            leans = []
+            for frame in range(160):
+                data = pose(mode, frame / 160)
+                limb = data['limbs'][0]
+                a = tuple(limb['shoulder'][i] - limb['elbow'][i] for i in (0, 1))
+                b = tuple(limb['wrist'][i] - limb['elbow'][i] for i in (0, 1))
+                cosine = sum(x * y for x, y in zip(a, b)) / data['arm'] ** 2
+                interior = math.degrees(math.acos(max(-1, min(1, cosine))))
+                elbows.append(interior)
+                shoes.append(limb['shoe_angle'])
+                leans.append(data['lean'])
+                if limb['elbow'][0] < limb['shoulder'][0] - data['arm'] * .75:
+                    self.assertGreater(interior, 145)
+            self.assertGreater(max(elbows), 155)
+            self.assertLess(min(elbows), 100)
+            self.assertGreater(max(shoes), 75)
+            self.assertLess(min(shoes), -20)
+            self.assertGreater(max(leans) - min(leans), 5)
 
     def test_stride_has_extension_recovery_and_flight(self):
         for mode in ('natural', 'q'):
@@ -73,9 +96,10 @@ class RunCycleTests(unittest.TestCase):
         for mode in ('natural', 'q'):
             for frame in range(16):
                 img = rig.render(mode, frame).toImage()
-                for n in range(1000):
-                    for x, y in ((n, 0), (n, 999), (0, n), (999, n)):
-                        self.assertEqual(img.pixelColor(x, y).alpha(), 0, (mode, frame, x, y))
+                border = ([(x, y) for x in range(img.width()) for y in (0, img.height() - 1)] +
+                          [(x, y) for y in range(img.height()) for x in (0, img.width() - 1)])
+                for x, y in border:
+                    self.assertEqual(img.pixelColor(x, y).alpha(), 0, (mode, frame, x, y))
 
 
 if __name__ == '__main__':

@@ -21,10 +21,10 @@ class Pet(QWidget):
         self.closed = QPixmap(str(base / 'blink.png'))
         self.q_open = QPixmap(str(base / 'q-open.png'))
         rig = RunRig(base)
-        self.q_running = [rig.render('q', frame).scaled(512, 512, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.q_running = [rig.render('q', frame).scaledToHeight(512, Qt.SmoothTransformation)
                           for frame in range(FRAME_COUNT)]
         self.natural_open = QPixmap(str(base / 'natural-open.png'))
-        self.natural_running = [rig.render('natural', frame).scaled(512, 512, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.natural_running = [rig.render('natural', frame).scaledToHeight(512, Qt.SmoothTransformation)
                                 for frame in range(FRAME_COUNT)]
         if any(pix.isNull() for pix in (self.open, self.closed, self.q_open,
                                         self.natural_open, *self.q_running, *self.natural_running)):

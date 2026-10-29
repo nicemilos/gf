@@ -26,7 +26,8 @@ class Stage(QWidget):
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor('#e9edf1'))
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
-        size = min(self.width() / 2 - 30, self.height() - 90)
+        aspect = self.frames[False][0][0].width() / self.frames[False][0][0].height()
+        size = min((self.width() / 2 - 30) / aspect, self.height() - 90)
         for i in range(2):
             center = self.width() * (i + .5) / 2
             top = 50
@@ -50,14 +51,14 @@ class Stage(QWidget):
 class Preview(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('小雅 · 正侧面大步跑 · 16帧完整循环')
-        self.resize(900, 580)
+        self.setWindowTitle('小雅 · 夸张大步跑 · 摆臂 / 衣摆 / 脚掌翻转')
+        self.resize(1100, 600)
         self.stage = Stage()
         self.playing = True
         self.started = time.monotonic()
         self.start_frame = 0
         layout = QVBoxLayout(self)
-        layout.addWidget(QLabel('大步跑 · 青色为近侧手脚，橙色为远侧手脚 · 第 1 与第 9 帧交换两侧'))
+        layout.addWidget(QLabel('夸张大步跑 · 后摆展臂、前摆收臂 · 青色为近侧手脚，橙色为远侧手脚'))
         layout.addWidget(self.stage)
         row = QHBoxLayout()
         self.play_button = QPushButton('暂停')
