@@ -5,7 +5,12 @@ a = Analysis(
     ['pet.py'],
     pathex=[],
     binaries=[],
-    datas=[('assets', 'assets')],
+    # Ship runtime artwork only, never local previews or abandoned rig drafts.
+    datas=[('assets/' + name, 'assets') for name in
+           ('open.png', 'blink.png', 'q-open.png', 'natural-open.png')]
+          + [('assets/whole-run/' + style + '/' + name, 'assets/whole-run/' + style)
+             for style in ('q', 'natural')
+             for name in ['frames.json'] + [f'{i:02}.png' for i in range(1, 9)]],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},

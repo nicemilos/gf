@@ -2,17 +2,28 @@
 
 使用 PySide6 开发的透明悬浮桌宠，角色素材保存在本地，离线运行。
 
+## 直接下载使用（无需 Python）
+
+进入 [最新 Release 下载页](https://github.com/nicemilos/gf/releases/latest)，选择 **Assets** 中的文件：
+
+- `Xiaoya-版本-windows-x64-setup.exe`：安装版，双击安装到当前用户目录，无需管理员权限。带开始菜单入口，可选桌面快捷方式，可在 Windows 设置中卸载。
+- `Xiaoya-版本-windows-x64-portable.zip`：免安装版，完整解压后双击 `Xiaoya.exe`。请保留旁边的 `_internal` 文件夹，不要直接在 ZIP 中运行。
+- `SHA256SUMS.txt`：下载文件校验值；`Source code` 是源码，不是可直接运行的程序。
+
+仅提供 Windows x64（64位 Intel/AMD）版本，已在 Windows 11 验证；Windows 10 兼容性尚未实机验证。不提供 macOS/Linux 包，当前密钥加密依赖 Windows DPAPI。
+
+升级前从右键菜单退出旧版，再覆盖解压或运行新版安装程序。安装版与免安装版共用当前 Windows 用户的聊天、记忆和设置；卸载不会删除这些个人数据。换电脑时加密 Key 不能直接解密，需要重新填写。当前发行包尚未购买代码签名证书，Windows 可能显示未知发布者提示。
+
 ## 功能
 
 - 始终置顶，鼠标拖动时显示跑步动作与方向，松开后恢复站立。
-- 默认显示 Q 版；单击角色可在 Q 版与接近原照的形象之间切换，右键菜单也可切换。
+- 默认显示 Q 版；单击角色显示文字气泡，右键菜单切换 Q 版与接近原照的形象。
 - 原版和Q版分别使用8张完整人物跑步图，12帧/秒；运行 `python preview_whole_run.py` 可切换两版逐帧检查。原版保持更小的头部和更修长的躯干、四肢。
 - 轻微呼吸；新形象暂无配套闭眼帧。
-- 两版独立头身比例的正侧面大步跑：16帧完整循环，包含落地、后蹬、收腿、前摆和腾空；左右腿相差半个周期，上臂与同侧大腿反向摆动。
-- 夸张展臂与动态屈肘、脚掌翻转、身体俯仰和衣摆回弹；Q 版长发向后扬起。
+- 两版独立头身比例的正侧面大步跑，使用完整人物绘图，手腿交替；Q 版长发向后扬起。
 - 双击角色跳一下。
 - 右键调整三档大小、开关动画或退出。
-- 托盘菜单支持找回角色和退出。
+- 托盘菜单支持移回屏幕内和退出；支持模型配置、聊天、性格与持续记忆。
 
 ## 从源码运行
 
@@ -34,6 +45,16 @@ python -m venv .venv
 ```
 
 产物为 `dist/Xiaoya/Xiaoya.exe`。分发时保留整个 `dist/Xiaoya` 文件夹，包含 `_internal` 依赖目录。
+
+创建可分发的 ZIP 和安装 EXE（需安装 [Inno Setup 6](https://jrsoftware.org/isdl.php)）：
+
+```powershell
+python scripts/build_release.py --version 0.1.0 --iscc "C:\Program Files (x86)\Inno Setup 6\ISCC.exe"
+```
+
+输出在 `dist/release/`，脚本会先检查打包后的程序能否启动，再生成 ZIP、安装程序和 SHA256 校验文件。只收集运行所需图片，不包含开发预览、历史草稿、API Key 或聊天数据库。省略 `--iscc` 且 PATH 中没有编译器时只生成 ZIP。
+
+`.github/workflows/release.yml` 在推送 `v0.1.0` 这样的版本标签时自动运行检查、打包并发布 GitHub Release；手动运行 workflow 仅生成可下载的构建产物。Windows 之外的平台需要先适配和验证，再增加对应构建任务。
 
 打包配置过滤了曾导致 Qt 启动失败的外部 ICU DLL，使用当前 Windows 系统的 ICU。不同 Windows 版本需要重新验证兼容性。
 
