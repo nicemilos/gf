@@ -19,13 +19,13 @@ jobs:
       - name: Install dependencies
         run: python -m pip install -r requirements-build.txt
       - name: Check behavior
-        run: python -m unittest test_companion test_whole_run test_coat_palette test_single_instance -v
+        run: python -m unittest test_companion test_whole_run test_coat_palette test_single_instance test_edge_peek test_pet_drag -v
       - name: Install installer compiler
         run: choco install innosetup --no-progress -y
       - name: Build and smoke-test
         shell: pwsh
         run: |
-          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.1.1' }
+          $version = if ($env:GITHUB_REF_TYPE -eq 'tag') { $env:GITHUB_REF_NAME.TrimStart('v') } else { '0.1.2' }
           $compiler = Get-Item 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe', 'C:\Program Files\Inno Setup 7\ISCC.exe', 'C:\Program Files (x86)\Inno Setup 7\ISCC.exe' -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $compiler) { throw 'Inno Setup compiler not found' }
           python scripts/build_release.py --version $version --iscc $compiler.FullName

@@ -1,15 +1,17 @@
 import math
+import json
 import random
 import sys
 import time
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, QRectF, QSettings
-from PySide6.QtGui import QPixmap, QPainter, QIcon
+from PySide6.QtCore import Qt, QTimer, QRectF, QSettings, QPoint, QPropertyAnimation, QEasingCurve
+from PySide6.QtGui import QPixmap, QPainter, QIcon, QBitmap, QRegion
 from PySide6.QtWidgets import QApplication, QWidget, QMenu, QSystemTrayIcon
 from whole_run import WholeRun, FPS as WHOLE_FPS
 from companion_ui import Companion, STYLE, beside
 from single_instance import SingleInstance
+from edge_peek import peek_edge, nearest_peek_edge
 
 
 class Pet(QWidget):
@@ -26,6 +28,16 @@ class Pet(QWidget):
         self.q_running = [pix.scaledToHeight(512, Qt.SmoothTransformation)
                           for pix in WholeRun(base).frames]
         self.natural_open = QPixmap(str(base / 'natural-open.png'))
+        self.peeks = {}
+        self.peek_insets = {}
+        wall_x = json.loads((base / 'peek.json').read_text(encoding='utf-8'))['wall_x']
+        for style in ('q', 'natural'):
+            sprite = QPixmap(str(base / f'{style}-peek.png'))
+            if sprite.isNull():
+                raise RuntimeError(f'缺少探头素材：{style}-peek.png')
+            bounds = QRegion(QBitmap.fromImage(sprite.toImage().createAlphaMask())).boundingRect()
+            self.peeks[style] = sprite.copy(bounds)
+            self.peek_insets[style] = (wall_x[style] - bounds.left()) / bounds.height()
         self.natural_running = [pix.scaledToHeight(512, Qt.SmoothTransformation)
                                 for pix in WholeRun(base, 'natural').frames]
         if any(pix.isNull() for pix in (self.open, self.closed, self.q_open,
@@ -37,7 +49,13 @@ class Pet(QWidget):
         self.motion = str(self.settings.value('motion', 'true')).lower() in ('true', '1')
         self.drag_offset = None
         self.drag_origin = None
+        self.drag_last_cursor = None
         self.dragging = False
+        self.peek_side = None
+        self.peek_screen = None
+        self.auto_motion = None
+        self.auto_target = None
+        self.hide_return_position = None
         self.run_window_extra = 0
         self.run_direction = 1
         self.last_drag_move = 0
@@ -78,12 +96,26 @@ class Pet(QWidget):
         self.update()
 
     def paintEvent(self, event):
+        if self.peek_side:
+            pix = self.peeks[self.appearance]
+            h = min(self.pet_height * .86, (self.width() - 8) * pix.height() / pix.width())
+            w = h * pix.width() / pix.height()
+            painter = QPainter(self)
+            painter.setRenderHint(QPainter.SmoothPixmapTransform)
+            if self.peek_side == 'right':
+                painter.translate(self.width(), 0)
+                painter.scale(-1, 1)
+            # Align the imaginary wall itself, rather than fingertips that
+            # curl a few pixels past it, with the physical monitor edge.
+            x = -self.peek_insets[self.appearance] * h
+            painter.drawPixmap(QRectF(x, (self.height() - h) / 2, w, h), pix, QRectF(pix.rect()))
+            return
         now = time.monotonic()
         age = now - self.started
         breath = math.sin(age * 2.2) * .004 if self.motion else 0
         jump_age = now - self.jump_at
         lift = 27 * math.sin(jump_age / .6 * math.pi) if 0 < jump_age < .6 else 0
-        running = self.dragging and now - self.last_drag_move < .18
+        running = self.auto_motion is not None or (self.dragging and now - self.last_drag_move < .18)
         h = self.pet_height * (1 if running else 1 + breath)
         frames = self.q_running if self.appearance == 'q' else self.natural_running
         frame = int((now - self.run_started) * WHOLE_FPS) % len(frames)
@@ -105,9 +137,18 @@ class Pet(QWidget):
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
+            self.stop_auto_move()
+            self.hide_return_position = None
             self.companion.bubble.hide()
             self.drag_offset = event.globalPosition().toPoint() - self.pos()
+            if self.peek_side:
+                # The virtual standing center starts at the edge, while the
+                # visible peeking sprite stays safely clickable inside it.
+                r = self.peek_screen.geometry()
+                edge = r.left() if self.peek_side == 'left' else r.right() + 1
+                self.drag_offset.setX(event.globalPosition().toPoint().x() - edge + self.width() // 2)
             self.drag_origin = event.globalPosition().toPoint()
+            self.drag_last_cursor = self.drag_origin
             self.dragging = False
             self.setCursor(Qt.ClosedHandCursor)
 
@@ -116,6 +157,7 @@ class Pet(QWidget):
             cursor = event.globalPosition().toPoint()
             if not self.dragging and (cursor - self.drag_origin).manhattanLength() < 4:
                 return
+            target_width = self.width()
             if not self.dragging:
                 self.dragging = True
                 self.run_started = time.monotonic()
@@ -124,14 +166,28 @@ class Pet(QWidget):
                 self.run_window_extra = max(0, run_width - self.width())
                 if self.run_window_extra:
                     half_extra = self.run_window_extra // 2
-                    self.resize(self.width() + self.run_window_extra, self.height())
-                    self.move(self.x() - half_extra, self.y())
+                    target_width += self.run_window_extra
                     self.drag_offset.setX(self.drag_offset.x() + half_extra)
-            delta_x = cursor.x() - self.x() - self.drag_offset.x()
+            # The visible window is pinned while peeking. Direction must track
+            # the pointer, rather than distance from that constrained window.
+            delta_x = cursor.x() - self.drag_last_cursor.x()
+            self.drag_last_cursor = cursor
             if delta_x:
                 self.run_direction = 1 if delta_x > 0 else -1
             self.last_drag_move = time.monotonic()
-            self.move(cursor - self.drag_offset)
+            desired = cursor - self.drag_offset
+            screen = QApplication.screenAt(cursor) or self.peek_screen or QApplication.primaryScreen()
+            center = desired + QPoint(target_width // 2, self.height() // 2)
+            normal_width = round(self.pet_height * 2 / 3) + 24
+            self.peek_side = peek_edge(center, screen.geometry(),
+                                       [s.geometry() for s in QApplication.screens()],
+                                       normal_width, self.peek_side)
+            self.peek_screen = screen if self.peek_side else None
+            if self.peek_side:
+                desired = self.peek_position(desired.y(), target_width)
+            # Commit one final rectangle. Moving outside first and snapping
+            # back makes Windows' translucent window visibly flash.
+            self.setGeometry(desired.x(), desired.y(), target_width, self.height())
             self.update()
 
     def mouseReleaseEvent(self, event):
@@ -139,11 +195,13 @@ class Pet(QWidget):
             was_dragging = self.dragging
             self.drag_offset = None
             self.drag_origin = None
+            self.drag_last_cursor = None
             self.dragging = False
             if self.run_window_extra:
                 half_extra = self.run_window_extra // 2
-                self.move(self.x() + half_extra, self.y())
-                self.resize(self.width() - self.run_window_extra, self.height())
+                width = self.width() - self.run_window_extra
+                position = self.peek_position(width=width) if self.peek_side else self.pos() + QPoint(half_extra, 0)
+                self.setGeometry(position.x(), position.y(), width, self.height())
                 self.run_window_extra = 0
             self.unsetCursor()
             self.keep_on_screen()
@@ -154,10 +212,25 @@ class Pet(QWidget):
             self.suppress_click_menu = False
 
     def keep_on_screen(self):
+        if self.peek_side:
+            self.position_peek()
+            return
         screen = QApplication.screenAt(self.frameGeometry().center()) or QApplication.primaryScreen()
         r = screen.availableGeometry()
         self.move(max(r.left(), min(self.x(), r.right() - self.width() + 1)),
                   max(r.top(), min(self.y(), r.bottom() - self.height() + 1)))
+
+    def peek_position(self, y=None, width=None):
+        screen = self.peek_screen if self.peek_screen in QApplication.screens() else QApplication.primaryScreen()
+        self.peek_screen = screen
+        r = screen.geometry()
+        work = screen.availableGeometry()
+        x = r.left() if self.peek_side == 'left' else r.right() + 1 - (self.width() if width is None else width)
+        y = self.y() if y is None else y
+        return QPoint(x, max(work.top(), min(y, work.bottom() + 1 - self.height())))
+
+    def position_peek(self):
+        self.move(self.peek_position())
 
     def mouseDoubleClickEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -184,7 +257,10 @@ class Pet(QWidget):
             action.setCheckable(True)
             action.setChecked(self.motion == enabled)
         menu.addAction('跳一下', lambda: setattr(self, 'jump_at', time.monotonic()))
-        menu.addAction('移回屏幕内', self.restore)
+        hiding = menu.addAction(self.hiding_label(), self.toggle_hiding)
+        hiding.setObjectName('toggle_hiding')
+        # The tray retains its menu while drag/animation can change state.
+        menu.aboutToShow.connect(lambda: hiding.setText(self.hiding_label()))
         menu.addSeparator()
         menu.addAction('退出桌宠', QApplication.instance().quit)
         return menu
@@ -209,10 +285,123 @@ class Pet(QWidget):
         self.tray.setContextMenu(self.menu())
 
     def change_size(self, height):
+        self.stop_auto_move()
         self.resize_pet(height)
         self.keep_on_screen()
 
+    def hiding_label(self):
+        return '快回来' if self.peek_side or self.auto_target == 'hide' else '躲起来'
+
+    def toggle_hiding(self):
+        if self.peek_side or self.auto_target == 'hide':
+            self.come_back()
+        else:
+            self.hide_nearby()
+
+    def stop_auto_move(self):
+        if self.auto_motion is None:
+            return
+        self.auto_motion.stop()
+        self.auto_motion.deleteLater()
+        self.auto_motion = None
+        self.auto_target = None
+        if self.run_window_extra:
+            width = self.width() - self.run_window_extra
+            x = self.x() + self.run_window_extra // 2
+            self.run_window_extra = 0
+            self.setGeometry(x, self.y(), width, self.height())
+        self.update()
+
+    def inside_position(self, screen, preferred):
+        r = screen.availableGeometry()
+        width = round(self.pet_height * 2 / 3) + 24
+        return QPoint(max(r.left(), min(preferred.x(), r.right() + 1 - width)),
+                      max(r.top(), min(preferred.y(), r.bottom() + 1 - self.height())))
+
+    def return_position(self):
+        screen = self.peek_screen or QApplication.screenAt(self.geometry().center()) or QApplication.primaryScreen()
+        if screen not in QApplication.screens():
+            screen = QApplication.primaryScreen()
+        if self.hide_return_position is not None:
+            center = self.hide_return_position + QPoint(round(self.pet_height * 2 / 3 + 24) // 2, self.height() // 2)
+            screen = QApplication.screenAt(center) or screen
+            return screen, self.inside_position(screen, self.hide_return_position)
+        r = screen.availableGeometry()
+        width = round(self.pet_height * 2 / 3) + 24
+        margin = max(40, width // 2)
+        x = r.left() + margin if self.peek_side == 'left' else r.right() + 1 - width - margin
+        return screen, self.inside_position(screen, QPoint(x, self.y()))
+
+    def hide_nearby(self):
+        self.stop_auto_move()
+        self.companion.bubble.hide()
+        self.click_menu_timer.stop()
+        self.hide_return_position = self.pos()
+        screens = QApplication.screens()
+        index, side = nearest_peek_edge(self.geometry().center(), [s.geometry() for s in screens])
+        screen = screens[index]
+        r = screen.geometry()
+        center_x = r.left() if side == 'left' else r.right() + 1
+        self.start_auto_move(QPoint(center_x, self.y()), 'hide', screen, side)
+
+    def come_back(self):
+        self.stop_auto_move()
+        screen, position = self.return_position()
+        width = round(self.pet_height * 2 / 3) + 24
+        self.start_auto_move(position + QPoint(width // 2, 0), 'return', screen)
+
+    def start_auto_move(self, target, purpose, screen, side=None):
+        """Animate a virtual center; commit the final peeking rectangle once."""
+        self.companion.bubble.hide()
+        self.click_menu_timer.stop()
+        self.peek_side = None
+        self.peek_screen = screen
+        normal_width = round(self.pet_height * 2 / 3) + 24
+        frames = self.q_running if self.appearance == 'q' else self.natural_running
+        width = max(normal_width, max(round(self.pet_height * p.width() / p.height()) for p in frames) + 24)
+        center_x = self.x() + self.width() // 2
+        target.setY(self.inside_position(screen, target).y())
+        start = QPoint(center_x - width // 2, self.y())
+        end = QPoint(target.x() - width // 2, target.y())
+        self.run_direction = 1 if end.x() >= start.x() else -1
+        self.run_started = time.monotonic()
+        self.run_window_extra = width - normal_width
+        animation = QPropertyAnimation(self, b'pos', self)
+        self.auto_motion = animation
+        self.auto_target = purpose
+        self.setGeometry(start.x(), start.y(), width, self.height())
+        animation.setDuration(max(240, min(1500, round((end - start).manhattanLength() / 800 * 1000))))
+        animation.setStartValue(start)
+        animation.setEndValue(end)
+        animation.setEasingCurve(QEasingCurve.InOutSine)
+
+        def finished():
+            if self.auto_motion is not animation:
+                return
+            self.auto_motion = None
+            self.auto_target = None
+            self.run_window_extra = 0
+            self.peek_side = side if purpose == 'hide' else None
+            self.peek_screen = screen if self.peek_side else None
+            position = self.peek_position(end.y(), normal_width) if self.peek_side else QPoint(target.x() - normal_width // 2, end.y())
+            self.setGeometry(position.x(), position.y(), normal_width, self.height())
+            if not self.peek_side:
+                self.hide_return_position = None
+            self.update()
+            animation.deleteLater()
+
+        animation.finished.connect(finished)
+        animation.start()
+        self.update()
+
     def restore(self):
+        self.stop_auto_move()
+        position = self.return_position()[1] if self.peek_side else None
+        self.peek_side = None
+        self.peek_screen = None
+        self.hide_return_position = None
+        if position is not None:
+            self.move(position)
         # Re-map the native window even if Windows hid it outside Qt.
         self.hide()
         self.show()
