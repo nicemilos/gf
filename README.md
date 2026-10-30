@@ -1,4 +1,4 @@
-# 小雅 · Windows 桌宠
+# 小雅
 
 使用 PySide6 开发的透明悬浮桌宠，角色素材保存在本地，离线运行。
 
@@ -11,6 +11,8 @@
 - `SHA256SUMS.txt`：下载文件校验值；`Source code` 是源码，不是可直接运行的程序。
 
 仅提供 Windows x64（64位 Intel/AMD）版本，已在 Windows 11 验证；Windows 10 兼容性尚未实机验证。不提供 macOS/Linux 包，当前密钥加密依赖 Windows DPAPI。
+
+v0.1.1 起安装及卸载向导使用简体中文，程序和快捷方式使用小雅头像。重复打开会找回已运行的小雅，不再创建多个窗口；源码、免安装版和安装版共用单实例。升级前仍需退出旧版（v0.1.0 没有单实例保护）。
 
 升级前从右键菜单退出旧版，再覆盖解压或运行新版安装程序。安装版与免安装版共用当前 Windows 用户的聊天、记忆和设置；卸载不会删除这些个人数据。换电脑时加密 Key 不能直接解密，需要重新填写。当前发行包尚未购买代码签名证书，Windows 可能显示未知发布者提示。
 
@@ -53,6 +55,8 @@ python scripts/build_release.py --version 0.1.0 --iscc "C:\Program Files (x86)\I
 ```
 
 输出在 `dist/release/`，脚本会先检查打包后的程序能否启动，再生成 ZIP、安装程序和 SHA256 校验文件。只收集运行所需图片，不包含开发预览、历史草稿、API Key 或聊天数据库。省略 `--iscc` 且 PATH 中没有编译器时只生成 ZIP。
+
+`assets/app-icon.ico` 包含16到256像素图标，嵌入程序和安装 EXE；`scripts/build_icon.py` 从已确认的 Q 版图片绘制头像徽章（重新生成需 Pillow）。`packaging/ChineseSimplified.isl` 使用 [Inno Setup 简体中文翻译](https://github.com/jrsoftware/issrc/blob/main/Files/Languages/ChineseSimplified.isl)，保留原作者说明。
 
 `.github/workflows/release.yml` 在推送 `v0.1.0` 这样的版本标签时自动运行检查、打包并发布 GitHub Release；手动运行 workflow 仅生成可下载的构建产物。Windows 之外的平台需要先适配和验证，再增加对应构建任务。
 

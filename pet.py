@@ -5,19 +5,21 @@ import time
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QTimer, QRectF, QSettings
-from PySide6.QtGui import QPixmap, QPainter
+from PySide6.QtGui import QPixmap, QPainter, QIcon
 from PySide6.QtWidgets import QApplication, QWidget, QMenu, QSystemTrayIcon
 from whole_run import WholeRun, FPS as WHOLE_FPS
 from companion_ui import Companion, STYLE, beside
+from single_instance import SingleInstance
 
 
 class Pet(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle('小雅 · 桌面陪伴')
+        self.setWindowTitle('小雅')
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
         base = Path(getattr(sys, '_MEIPASS', Path(__file__).parent)) / 'assets'
+        self.setWindowIcon(QIcon(str(base / 'app-icon.ico')))
         self.open = QPixmap(str(base / 'open.png'))
         self.closed = QPixmap(str(base / 'blink.png'))
         self.q_open = QPixmap(str(base / 'q-open.png'))
@@ -53,7 +55,7 @@ class Pet(QWidget):
         screen = QApplication.primaryScreen().availableGeometry()
         self.move(screen.right() - self.width() - 40, screen.bottom() - self.height() - 20)
         self.setToolTip('小雅：点击说话，右键打开菜单，拖动跑步，双击跳一下')
-        self.tray = QSystemTrayIcon(self.q_open, self)
+        self.tray = QSystemTrayIcon(self.windowIcon(), self)
         self.tray.setToolTip('小雅 · 双击托盘图标找回桌宠')
         self.tray.setContextMenu(self.menu())
         self.tray.activated.connect(self.tray_activated)
@@ -166,7 +168,7 @@ class Pet(QWidget):
     def menu(self):
         menu = QMenu()
         menu.setStyleSheet(STYLE)
-        menu.addAction('小雅 · 桌面陪伴').setEnabled(False)
+        menu.addAction('小雅').setEnabled(False)
         menu.addSeparator()
         menu.addAction('和小雅聊天', self.companion.open_chat)
         menu.addAction('模型配置…', self.companion.configure)
@@ -211,9 +213,12 @@ class Pet(QWidget):
         self.keep_on_screen()
 
     def restore(self):
+        # Re-map the native window even if Windows hid it outside Qt.
+        self.hide()
         self.show()
         self.keep_on_screen()
         self.raise_()
+        self.activateWindow()
 
     def tray_activated(self, reason):
         if reason == QSystemTrayIcon.DoubleClick:
@@ -229,8 +234,14 @@ class Pet(QWidget):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+    app.setWindowIcon(QIcon(str(Path(getattr(sys, '_MEIPASS', Path(__file__).parent)) / 'assets/app-icon.ico')))
     app.setQuitOnLastWindowClosed(False)
+    instance = SingleInstance()
+    if not instance.primary:
+        sys.exit(0)
+    app.aboutToQuit.connect(instance.close)
     pet = Pet()
+    instance.activated.connect(pet.restore)
     pet.show()
     if '--smoke-test' in sys.argv:
         QTimer.singleShot(500, app.quit)

@@ -36,7 +36,7 @@ def main():
     output = ROOT / 'dist' / 'release'
     output.mkdir(parents=True, exist_ok=True)
     (app / '使用说明.txt').write_text(
-        '小雅桌宠 ' + args.version + '\n\n'
+        '小雅 ' + args.version + '\n\n'
         '请先完整解压，再双击 Xiaoya.exe。不需要安装 Python。\n'
         '请保留 _internal 文件夹。左键说话，拖动跑步，双击跳跃。\n'
         '右键菜单：聊天、模型配置、性格与记忆、切换形象、大小、退出。\n'
